@@ -112,6 +112,17 @@ class ExtractionView(QtWidgets.QWidget):
             session.extraction_method = current_data
             logger.debug(f"Extraction method changed to: {current_data.value}")
 
+            # Reset the extraction model for the current repetition
+            em = session.extraction_model()
+            if em:
+                logger.debug(
+                    f"Resetting extraction model for repetition {session._current_repetition_key}"
+                )
+                em.reset()
+
+                # Refresh the UI to show the empty extraction model
+                self.refresh_image_plot()
+
     def update_ui(self):
         session = Session.get_instance()
         self.combobox_datasets.clear()
@@ -120,8 +131,6 @@ class ExtractionView(QtWidgets.QWidget):
 
         calib_keys = session.get_calib_keys(sort_by_time=True)
         self.combobox_datasets.addItems(calib_keys)
-
-        # Update extraction method selection
         self.update_extraction_method_selection()
 
     def reset_ui(self):
