@@ -7,7 +7,7 @@ from matplotlib.patches import Circle as MPLCircle
 import matplotlib
 import numpy as np
 
-from bmlab.session import Session
+from bmlab.session import Session, ExtractionMethod
 from bmlab.controllers import ExtractionController
 
 from bmicro.BGThread import BGThread
@@ -28,29 +28,33 @@ class ExtractionView(QtWidgets.QWidget):
     def __init__(self, *args, **kwargs):
         super(ExtractionView, self).__init__(*args, **kwargs)
 
-        ref = resources.files('bmicro.gui.extraction') / 'extraction_view.ui'
+        ref = resources.files("bmicro.gui.extraction") / "extraction_view.ui"
         with resources.as_file(ref) as ui_file:
             uic.loadUi(ui_file, self)
 
         self.mode = MODE_DEFAULT
         self.current_frame = 0
 
-        self.mplcanvas = MplCanvas(
-            self.image_widget, toolbar=('Home', 'Pan', 'Zoom'))
+        self.mplcanvas = MplCanvas(self.image_widget, toolbar=("Home", "Pan", "Zoom"))
         self.image_plot = self.mplcanvas.get_figure().add_subplot(111)
-        self.image_plot.axis('off')
+        self.image_plot.axis("off")
         self.mplcanvas.get_figure().canvas.mpl_connect(
-            'button_press_event', self.on_click_image)
+            "button_press_event", self.on_click_image
+        )
 
         self.thread = BGThread()
 
-        self.combobox_datasets.currentIndexChanged.connect(
-            self.on_select_dataset)
+        self.combobox_datasets.currentIndexChanged.connect(self.on_select_dataset)
+        self.combobox_extraction_method.currentTextChanged.connect(
+            self.on_extraction_method_changed
+        )
 
         self.table_selected_points.itemChanged.connect(
-            lambda item: self.on_points_changed(item))
+            lambda item: self.on_points_changed(item)
+        )
 
         self.setupTable()
+        self.setup_extraction_method_combobox()
 
         self.button_select_done.clicked.connect(self.toggle_mode)
         self.button_clear.clicked.connect(self.clear_points)
@@ -66,6 +70,48 @@ class ExtractionView(QtWidgets.QWidget):
 
         self.extraction_controller = ExtractionController()
 
+    def setup_extraction_method_combobox(self):
+        """
+        Setup the extraction method combobox with available options.
+        """
+        self.combobox_extraction_method.clear()
+
+        # Add human-readable labels for each extraction method
+        method_labels = {
+            ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG: "Arc from points of average image",
+            ExtractionMethod.ARC_FROM_PTS_OF_ALL_IMGS: "Arc from points of all images",
+        }
+
+        for method in ExtractionMethod:
+            self.combobox_extraction_method.addItem(method_labels[method], method)
+
+        self.update_extraction_method_selection()
+
+    def update_extraction_method_selection(self):
+        """
+        Update the combobox selection to match the current session's extraction method.
+        """
+        session = Session.get_instance()
+        current_method = getattr(
+            session, "extraction_method", ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG
+        )
+
+        # Find the index of the current method in the combobox
+        for i in range(self.combobox_extraction_method.count()):
+            if self.combobox_extraction_method.itemData(i) == current_method:
+                self.combobox_extraction_method.setCurrentIndex(i)
+                break
+
+    def on_extraction_method_changed(self):
+        """
+        Handle changes to the extraction method selection.
+        """
+        current_data = self.combobox_extraction_method.currentData()
+        if current_data is not None:
+            session = Session.get_instance()
+            session.extraction_method = current_data
+            logger.debug(f"Extraction method changed to: {current_data.value}")
+
     def update_ui(self):
         session = Session.get_instance()
         self.combobox_datasets.clear()
@@ -75,10 +121,15 @@ class ExtractionView(QtWidgets.QWidget):
         calib_keys = session.get_calib_keys(sort_by_time=True)
         self.combobox_datasets.addItems(calib_keys)
 
+        # Update extraction method selection
+        self.update_extraction_method_selection()
+
     def reset_ui(self):
         self.combobox_datasets.clear()
         self.table_selected_points.setRowCount(0)
         self.refresh_image_plot()
+        # Reset extraction method to default
+        self.update_extraction_method_selection()
 
     def prev_frame(self):
         if self.current_frame > 0:
@@ -130,11 +181,11 @@ class ExtractionView(QtWidgets.QWidget):
             return
         ec = ExtractionController()
         calib_key = self.combobox_datasets.currentText()
-        logger.debug('Adding point (%f, %f) for calibration key %s' % (
-            event.xdata, event.ydata, calib_key
-        ))
-        ec.add_point(calib_key,
-                     (event.xdata, event.ydata))
+        logger.debug(
+            "Adding point (%f, %f) for calibration key %s"
+            % (event.xdata, event.ydata, calib_key)
+        )
+        ec.add_point(calib_key, (event.xdata, event.ydata))
         self.refresh_image_plot()
 
     def refresh_image_plot(self):
@@ -154,20 +205,28 @@ class ExtractionView(QtWidgets.QWidget):
         # imshow should always get the transposed image such that
         # the horizontal axis of the plot coincides with the
         # 0-axis of the plotted array:
-        self.image_plot.imshow(img.T, origin='lower', vmin=100, vmax=300)
-        self.image_plot.set_title('Frame %d' % (self.current_frame+1))
+        self.image_plot.imshow(img.T, origin="lower", vmin=100, vmax=300)
+        self.image_plot.set_title("Frame %d" % (self.current_frame + 1))
 
         points = em.get_points(calib_key)
 
         if len(points) >= 3:
+
             em.set_image_shape(img.shape)
 
             arcs = em.get_arc_by_calib_key(calib_key)
+
             for arc in arcs:
                 dr = arc[-1] - arc[0]
                 line = matplotlib.patches.FancyArrow(
-                    *arc[0], dr[0], dr[1], head_width=0,
-                    head_length=0, color='Yellow', alpha=0.5)
+                    *arc[0],
+                    dr[0],
+                    dr[1],
+                    head_width=0,
+                    head_length=0,
+                    color="Yellow",
+                    alpha=0.5,
+                )
                 self.image_plot.add_patch(line)
 
         self._plot_points(em.get_points(calib_key))
@@ -177,13 +236,10 @@ class ExtractionView(QtWidgets.QWidget):
 
     def setupTable(self):
         self.table_selected_points.setColumnCount(2)
-        self.table_selected_points\
-            .setHorizontalHeaderLabels(["x", "y"])
+        self.table_selected_points.setHorizontalHeaderLabels(["x", "y"])
         header = self.table_selected_points.horizontalHeader()
-        header.setSectionResizeMode(0,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Stretch)
 
     def refresh_points(self):
         session = Session.get_instance()
@@ -224,7 +280,7 @@ class ExtractionView(QtWidgets.QWidget):
 
     def _plot_points(self, points):
         for p in points:
-            circle = MPLCircle(p, radius=3, color='red', alpha=0.5)
+            circle = MPLCircle(p, radius=3, color="red", alpha=0.5)
             self.image_plot.add_patch(circle)
 
     def toggle_mode(self):
@@ -236,10 +292,10 @@ class ExtractionView(QtWidgets.QWidget):
         """
         if self.mode == MODE_DEFAULT:
             self.mode = MODE_SELECT
-            self.button_select_done.setText('Done')
+            self.button_select_done.setText("Done")
         else:
             self.mode = MODE_DEFAULT
-            self.button_select_done.setText('Select')
+            self.button_select_done.setText("Select")
 
     def clear_points(self):
         """
@@ -278,20 +334,23 @@ class ExtractionView(QtWidgets.QWidget):
         for all calibrations existing.
         """
         session = Session.get_instance()
+
+        # The calib keys are the indices of the calibration datasets.
+        # Each calibration dataset usually contains multiple images/frames.
         calib_keys = session.get_calib_keys(sort_by_time=True)
 
         if not calib_keys:
             return
 
         for i, calib_key in enumerate(calib_keys):
+
             self.combobox_datasets.setCurrentText(calib_key)
 
             dnkw = {
                 "calib_key": calib_key,
             }
 
-            self.thread.set_task(
-                func=self.extraction_controller.find_points, fkw=dnkw)
+            self.thread.set_task(func=self.extraction_controller.find_points, fkw=dnkw)
             self.thread.start()
             self.thread.wait()
 
