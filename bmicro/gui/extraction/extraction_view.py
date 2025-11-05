@@ -97,11 +97,18 @@ class ExtractionView(QtWidgets.QWidget):
             session, "extraction_method", ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG
         )
 
+        # Block signals to avoid triggering on_extraction_method_changed
+        # when we're just syncing the UI with the session state
+        self.combobox_extraction_method.blockSignals(True)
+
         # Find the index of the current method in the combobox
         for i in range(self.combobox_extraction_method.count()):
             if self.combobox_extraction_method.itemData(i) == current_method:
                 self.combobox_extraction_method.setCurrentIndex(i)
                 break
+
+        # Unblock signals
+        self.combobox_extraction_method.blockSignals(False)
 
     def on_extraction_method_changed(self):
         """
@@ -132,6 +139,7 @@ class ExtractionView(QtWidgets.QWidget):
 
         calib_keys = session.get_calib_keys(sort_by_time=True)
         self.combobox_datasets.addItems(calib_keys)
+        # Update extraction method from session (which may have been set by setup)
         self.update_extraction_method_selection()
 
     def reset_ui(self):
