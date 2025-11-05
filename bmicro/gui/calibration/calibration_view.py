@@ -273,6 +273,8 @@ class CalibrationView(QtWidgets.QWidget):
             QtCore.QCoreApplication.instance().processEvents()
 
     def refresh_plot(self):
+        logger.info("Refreshing calibration plot...")
+
         self.plot.cla()
         session = Session.get_instance()
         calib_key = self.combobox_calibration.currentText()
@@ -281,6 +283,7 @@ class CalibrationView(QtWidgets.QWidget):
 
         try:
             cc = CalibrationController()
+
             spectrum, _, _ = cc.extract_spectra(calib_key, frame_num=self.current_frame)
             if spectrum is None:
                 return
@@ -300,6 +303,17 @@ class CalibrationView(QtWidgets.QWidget):
                     self.plot.set_xlim(
                         1e-9 * np.min(frequencies), 1e-9 * np.max(frequencies)
                     )
+                    # Add fine grid when frequencies are available
+                    from matplotlib.ticker import MultipleLocator
+
+                    self.plot.xaxis.set_major_locator(MultipleLocator(2.0))
+                    self.plot.xaxis.set_minor_locator(MultipleLocator(0.5))
+                    self.plot.grid(
+                        True, which="major", linestyle="-", linewidth=0.5, alpha=0.3
+                    )
+                    self.plot.grid(
+                        True, which="minor", linestyle=":", linewidth=0.3, alpha=0.2
+                    )
                 else:
                     self.plot.plot(spectrum)
                     self.plot.set_xlabel("$f$ [pix]")
@@ -315,9 +329,12 @@ class CalibrationView(QtWidgets.QWidget):
                     fit = cm.brillouin_fits.get_fit(
                         calib_key, region_key, self.current_frame
                     )
+
                     if fit is not None:
+                        logger.info(f"fit: {fit}")
                         w0s = fit.w0s
                         w0s_f = cm.get_frequency_by_calib_key(w0s, calib_key)
+                        logger.info(f"w0s: {w0s}, w0s_f: {w0s_f}")
                         if w0s_f is not None:
                             self.plot.vlines(
                                 1e-9 * w0s_f[0],
@@ -325,19 +342,21 @@ class CalibrationView(QtWidgets.QWidget):
                                 np.nanmax(spectrum),
                                 colors=["black"],
                             )
-                            self.plot.vlines(
-                                1e-9 * w0s_f[1],
-                                0,
-                                np.nanmax(spectrum),
-                                colors=["black"],
-                            )
+                            if len(w0s_f) > 1:
+                                self.plot.vlines(
+                                    1e-9 * w0s_f[1],
+                                    0,
+                                    np.nanmax(spectrum),
+                                    colors=["black"],
+                                )
                         else:
                             self.plot.vlines(
                                 w0s[0], 0, np.nanmax(spectrum), colors=["black"]
                             )
-                            self.plot.vlines(
-                                w0s[1], 0, np.nanmax(spectrum), colors=["black"]
-                            )
+                            if len(w0s) > 1:
+                                self.plot.vlines(
+                                    w0s[1], 0, np.nanmax(spectrum), colors=["black"]
+                                )
 
                 regions = cm.get_rayleigh_regions(calib_key, self.current_frame)
                 table = self.table_Rayleigh_regions
@@ -362,7 +381,11 @@ class CalibrationView(QtWidgets.QWidget):
                 expected = cc.expected_frequencies(calib_key, self.current_frame)
                 if expected is not None:
                     self.plot.vlines(
-                        1e-9 * expected, 0, np.nanmax(spectrum), colors=["green"]
+                        1e-9 * expected,
+                        0,
+                        np.nanmax(spectrum),
+                        colors=["green"],
+                        linestyles="dashed",
                     )
 
         except Exception as e:
