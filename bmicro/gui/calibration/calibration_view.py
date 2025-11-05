@@ -2,6 +2,7 @@ from importlib import resources
 import logging
 
 from PyQt6 import QtWidgets, QtCore, uic
+
 # from PyQt6.QtWidgets import QMessageBox
 from matplotlib.widgets import SpanSelector
 import numpy as np
@@ -18,9 +19,9 @@ from bmicro.gui.mpl import MplCanvas
 
 logger = logging.getLogger(__name__)
 
-MODE_DEFAULT = 'default'
-MODE_SELECT_BRILLOUIN = 'select_brillouin_peaks'
-MODE_SELECT_RAYLEIGH = 'select_rayleigh_peaks'
+MODE_DEFAULT = "default"
+MODE_SELECT_BRILLOUIN = "select_brillouin_peaks"
+MODE_SELECT_RAYLEIGH = "select_rayleigh_peaks"
 
 
 class CalibrationView(QtWidgets.QWidget):
@@ -31,43 +32,46 @@ class CalibrationView(QtWidgets.QWidget):
     def __init__(self, *args, **kwargs):
         super(CalibrationView, self).__init__(*args, **kwargs)
 
-        ref = resources.files('bmicro.gui.calibration') / 'calibration_view.ui'
+        ref = resources.files("bmicro.gui.calibration") / "calibration_view.ui"
         with resources.as_file(ref) as ui_file:
             uic.loadUi(ui_file, self)
 
-        self.mplcanvas = MplCanvas(self.image_widget,
-                                   toolbar=('Home', 'Pan', 'Zoom'))
+        self.mplcanvas = MplCanvas(self.image_widget, toolbar=("Home", "Pan", "Zoom"))
         self.plot = self.mplcanvas.get_figure().add_subplot(111)
 
         self.thread = BGThread()
 
-        props = dict(facecolor='green', alpha=0.5)
+        props = dict(facecolor="green", alpha=0.5)
         self.span_selector = SpanSelector(
-            self.plot, onselect=self.on_select_data_region,
+            self.plot,
+            onselect=self.on_select_data_region,
             useblit=True,
-            direction='horizontal', props=props)
+            direction="horizontal",
+            props=props,
+        )
 
         self.button_find_peaks.clicked.connect(self.find_peaks)
 
         self.button_brillouin_select_done.clicked.connect(
-            self.on_select_brillouin_clicked)
+            self.on_select_brillouin_clicked
+        )
         self.button_rayleigh_select_done.clicked.connect(
-            self.on_select_rayleigh_clicked)
-        self.button_brillouin_clear.released.connect(
-            self.clear_regions)
-        self.button_rayleigh_clear.released.connect(
-            self.clear_regions)
+            self.on_select_rayleigh_clicked
+        )
+        self.button_brillouin_clear.released.connect(self.clear_regions)
+        self.button_rayleigh_clear.released.connect(self.clear_regions)
 
         self.button_fit_clear.released.connect(self.clear_calibration)
 
         self.button_calibrate.released.connect(self.calibrate)
 
         self.button_find_peaks_all.released.connect(
-            lambda: self.calibrate_all(do_not='calibrate'))
+            lambda: self.calibrate_all(do_not="calibrate")
+        )
         self.button_calibrate_all.released.connect(
-            lambda: self.calibrate_all(do_not='find_peaks'))
-        self.button_peaks_and_calibrate_all\
-            .released.connect(self.calibrate_all)
+            lambda: self.calibrate_all(do_not="find_peaks")
+        )
+        self.button_peaks_and_calibrate_all.released.connect(self.calibrate_all)
 
         self.current_frame = 0
         self.button_prev_frame.clicked.connect(self.prev_frame)
@@ -81,12 +85,15 @@ class CalibrationView(QtWidgets.QWidget):
         self.mode = MODE_DEFAULT
 
         self.combobox_calibration.currentIndexChanged.connect(
-            self.on_select_calibration)
+            self.on_select_calibration
+        )
 
         self.table_Brillouin_regions.itemChanged.connect(
-            lambda item: self.on_region_changed(MODE_SELECT_BRILLOUIN, item))
+            lambda item: self.on_region_changed(MODE_SELECT_BRILLOUIN, item)
+        )
         self.table_Rayleigh_regions.itemChanged.connect(
-            lambda item: self.on_region_changed(MODE_SELECT_RAYLEIGH, item))
+            lambda item: self.on_region_changed(MODE_SELECT_RAYLEIGH, item)
+        )
 
         self.setupTables()
 
@@ -150,22 +157,22 @@ class CalibrationView(QtWidgets.QWidget):
     def on_select_brillouin_clicked(self):
         if self.mode == MODE_SELECT_BRILLOUIN:
             self.mode = MODE_DEFAULT
-            self.button_brillouin_select_done.setText('Select')
-            self.button_rayleigh_select_done.setText('Select')
+            self.button_brillouin_select_done.setText("Select")
+            self.button_rayleigh_select_done.setText("Select")
         else:
             self.mode = MODE_SELECT_BRILLOUIN
-            self.button_brillouin_select_done.setText('Done')
-            self.button_rayleigh_select_done.setText('Select')
+            self.button_brillouin_select_done.setText("Done")
+            self.button_rayleigh_select_done.setText("Select")
 
     def on_select_rayleigh_clicked(self):
         if self.mode == MODE_SELECT_RAYLEIGH:
             self.mode = MODE_DEFAULT
-            self.button_brillouin_select_done.setText('Select')
-            self.button_rayleigh_select_done.setText('Select')
+            self.button_brillouin_select_done.setText("Select")
+            self.button_rayleigh_select_done.setText("Select")
         else:
             self.mode = MODE_SELECT_RAYLEIGH
-            self.button_brillouin_select_done.setText('Select')
-            self.button_rayleigh_select_done.setText('Done')
+            self.button_brillouin_select_done.setText("Select")
+            self.button_rayleigh_select_done.setText("Done")
 
     def clear_regions(self):
         button = self.sender()
@@ -196,9 +203,9 @@ class CalibrationView(QtWidgets.QWidget):
         cm = session.calibration_model()
         if cm:
             if self.mode == MODE_SELECT_BRILLOUIN:
-                cm.add_brillouin_region(calib_key, (indmin, indmax))
+                cm.add_brillouin_region(calib_key, (indmin, indmax), self.current_frame)
             elif self.mode == MODE_SELECT_RAYLEIGH:
-                cm.add_rayleigh_region(calib_key, (indmin, indmax))
+                cm.add_rayleigh_region(calib_key, (indmin, indmax), self.current_frame)
 
         self.refresh_plot()
 
@@ -209,8 +216,8 @@ class CalibrationView(QtWidgets.QWidget):
     def calibrate(self):
         calib_key = self.combobox_calibration.currentText()
 
-        count = mp.Value('I', 0, lock=True)
-        max_count = mp.Value('i', 0, lock=True)
+        count = mp.Value("I", 0, lock=True)
+        max_count = mp.Value("i", 0, lock=True)
 
         dnkw = {
             "calib_key": calib_key,
@@ -218,12 +225,11 @@ class CalibrationView(QtWidgets.QWidget):
             "max_count": max_count,
         }
 
-        self.thread.set_task(
-            func=self.calibration_controller.calibrate, fkw=dnkw)
+        self.thread.set_task(func=self.calibration_controller.calibrate, fkw=dnkw)
         self.thread.start()
         # Show a progress until computation is done
         while max_count.value == 0 or count.value < max_count.value:
-            time.sleep(.05)
+            time.sleep(0.05)
             self.calibration_progress.setValue(count.value)
             if max_count.value >= 0:
                 self.calibration_progress.setMaximum(max_count.value)
@@ -249,14 +255,16 @@ class CalibrationView(QtWidgets.QWidget):
                 "calib_key": calib_key,
             }
 
-            if do_not != 'find_peaks':
+            if do_not != "find_peaks":
                 self.thread.set_task(
-                    func=self.calibration_controller.find_peaks, fkw=dnkw)
+                    func=self.calibration_controller.find_peaks, fkw=dnkw
+                )
                 self.thread.start()
                 self.thread.wait()
-            if do_not != 'calibrate':
+            if do_not != "calibrate":
                 self.thread.set_task(
-                    func=self.calibration_controller.calibrate, fkw=dnkw)
+                    func=self.calibration_controller.calibrate, fkw=dnkw
+                )
                 self.thread.start()
                 self.thread.wait()
             self.calibration_progress.setValue(i + 1)
@@ -273,10 +281,7 @@ class CalibrationView(QtWidgets.QWidget):
 
         try:
             cc = CalibrationController()
-            spectrum, _, _ = cc.extract_spectra(
-                calib_key,
-                frame_num=self.current_frame
-            )
+            spectrum, _, _ = cc.extract_spectra(calib_key, frame_num=self.current_frame)
             if spectrum is None:
                 return
 
@@ -289,89 +294,96 @@ class CalibrationView(QtWidgets.QWidget):
                 frequencies = cm.get_frequencies_by_calib_key(calib_key)
                 frequency = None
                 if frequencies:
-                    frequency = 1e-9*frequencies[self.current_frame]
+                    frequency = 1e-9 * frequencies[self.current_frame]
                     self.plot.plot(frequency, spectrum)
-                    self.plot.set_xlabel('$f$ [GHz]')
-                    self.plot.set_xlim(1e-9*np.min(frequencies),
-                                       1e-9*np.max(frequencies))
+                    self.plot.set_xlabel("$f$ [GHz]")
+                    self.plot.set_xlim(
+                        1e-9 * np.min(frequencies), 1e-9 * np.max(frequencies)
+                    )
                 else:
                     self.plot.plot(spectrum)
-                    self.plot.set_xlabel('$f$ [pix]')
+                    self.plot.set_xlabel("$f$ [pix]")
                     self.plot.set_xlim(0, len(spectrum))
                 self.plot.set_ylim(bottom=0)
-                self.plot.set_title('Frame %d' %
-                                    (self.current_frame+1))
+                self.plot.set_title("Frame %d" % (self.current_frame + 1))
 
-                regions = cm.get_brillouin_regions(calib_key)
+                regions = cm.get_brillouin_regions(calib_key, self.current_frame)
                 table = self.table_Brillouin_regions
-                self.refresh_regions(spectrum, regions, table, 'r', frequency)
+                self.refresh_regions(spectrum, regions, table, "r", frequency)
 
                 for region_key, region in enumerate(regions):
-                    fit = cm.brillouin_fits\
-                        .get_fit(calib_key, region_key, self.current_frame)
+                    fit = cm.brillouin_fits.get_fit(
+                        calib_key, region_key, self.current_frame
+                    )
                     if fit is not None:
                         w0s = fit.w0s
                         w0s_f = cm.get_frequency_by_calib_key(w0s, calib_key)
                         if w0s_f is not None:
-                            self.plot.vlines(1e-9*w0s_f[0], 0, np.nanmax(
-                                spectrum), colors=['black'])
-                            self.plot.vlines(1e-9*w0s_f[1], 0, np.nanmax(
-                                spectrum), colors=['black'])
+                            self.plot.vlines(
+                                1e-9 * w0s_f[0],
+                                0,
+                                np.nanmax(spectrum),
+                                colors=["black"],
+                            )
+                            self.plot.vlines(
+                                1e-9 * w0s_f[1],
+                                0,
+                                np.nanmax(spectrum),
+                                colors=["black"],
+                            )
                         else:
-                            self.plot.vlines(w0s[0], 0, np.nanmax(
-                                spectrum), colors=['black'])
-                            self.plot.vlines(w0s[1], 0, np.nanmax(
-                                spectrum), colors=['black'])
+                            self.plot.vlines(
+                                w0s[0], 0, np.nanmax(spectrum), colors=["black"]
+                            )
+                            self.plot.vlines(
+                                w0s[1], 0, np.nanmax(spectrum), colors=["black"]
+                            )
 
-                regions = cm.get_rayleigh_regions(calib_key)
+                regions = cm.get_rayleigh_regions(calib_key, self.current_frame)
                 table = self.table_Rayleigh_regions
-                self.refresh_regions(spectrum, regions, table, 'm', frequency)
+                self.refresh_regions(spectrum, regions, table, "m", frequency)
 
                 for region_key, region in enumerate(regions):
-                    fit = cm.rayleigh_fits\
-                        .get_fit(calib_key, region_key, self.current_frame)
+                    fit = cm.rayleigh_fits.get_fit(
+                        calib_key, region_key, self.current_frame
+                    )
                     if fit is not None:
                         w0 = fit.w0
                         w0_f = cm.get_frequency_by_calib_key(w0, calib_key)
                         if w0_f is not None:
-                            self.plot.vlines(1e-9*w0_f, 0, np.nanmax(
-                                spectrum), colors=['black'])
+                            self.plot.vlines(
+                                1e-9 * w0_f, 0, np.nanmax(spectrum), colors=["black"]
+                            )
                         else:
-                            self.plot.vlines(w0, 0, np.nanmax(
-                                spectrum), colors=['black'])
+                            self.plot.vlines(
+                                w0, 0, np.nanmax(spectrum), colors=["black"]
+                            )
 
-                expected = cc.expected_frequencies(
-                    calib_key, self.current_frame)
+                expected = cc.expected_frequencies(calib_key, self.current_frame)
                 if expected is not None:
-                    self.plot.vlines(1e-9 * expected, 0, np.nanmax(
-                        spectrum), colors=['green'])
+                    self.plot.vlines(
+                        1e-9 * expected, 0, np.nanmax(spectrum), colors=["green"]
+                    )
 
         except Exception as e:
-            logger.error('Exception occurred in calibration: %s' % e)
+            logger.error("Exception occurred in calibration: %s" % e)
         finally:
             self.mplcanvas.draw()
 
     def setupTables(self):
         self.table_Brillouin_regions.setColumnCount(2)
-        self.table_Brillouin_regions\
-            .setHorizontalHeaderLabels(["start", "end"])
+        self.table_Brillouin_regions.setHorizontalHeaderLabels(["start", "end"])
         header = self.table_Brillouin_regions.horizontalHeader()
-        header.setSectionResizeMode(0,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Stretch)
 
         self.table_Rayleigh_regions.setColumnCount(2)
-        self.table_Rayleigh_regions\
-            .setHorizontalHeaderLabels(["start", "end"])
+        self.table_Rayleigh_regions.setHorizontalHeaderLabels(["start", "end"])
         header = self.table_Rayleigh_regions.horizontalHeader()
-        header.setSectionResizeMode(0,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Stretch)
 
-    def refresh_regions(self, spectrum, regions, table, color,
-                        frequencies=None):
+    def refresh_regions(self, spectrum, regions, table, color, frequencies=None):
         table.setRowCount(len(regions))
         for rowIdx, region in enumerate(regions):
             mask = np.arange(int(region[0]), int(region[1]))
@@ -399,17 +411,21 @@ class CalibrationView(QtWidgets.QWidget):
         cm = session.calibration_model()
         if cm:
             if type == MODE_SELECT_BRILLOUIN:
-                regions = cm.get_brillouin_regions(calib_key)
+                regions = cm.get_brillouin_regions(calib_key, self.current_frame)
                 current_region = np.asarray(regions[row])
                 current_region[column] = value
                 current_region = tuple(current_region)
-                cm.set_brillouin_region(calib_key, row, current_region)
+                cm.set_brillouin_region(
+                    calib_key, row, current_region, self.current_frame
+                )
             elif type == MODE_SELECT_RAYLEIGH:
-                regions = cm.get_rayleigh_regions(calib_key)
+                regions = cm.get_rayleigh_regions(calib_key, self.current_frame)
                 current_region = np.asarray(regions[row])
                 current_region[column] = value
                 current_region = tuple(current_region)
-                cm.set_rayleigh_region(calib_key, row, current_region)
+                cm.set_rayleigh_region(
+                    calib_key, row, current_region, self.current_frame
+                )
             self.refresh_plot()
 
     def find_peaks(self):
@@ -424,34 +440,24 @@ class CalibrationView(QtWidgets.QWidget):
     def show_options(self):
         self.options_dialog = QtWidgets.QDialog(
             self,
-            QtCore.Qt.WindowType.WindowTitleHint |
-            QtCore.Qt.WindowType.WindowCloseButtonHint
+            QtCore.Qt.WindowType.WindowTitleHint
+            | QtCore.Qt.WindowType.WindowCloseButtonHint,
         )
-        ref = (resources.files('bmicro.gui.calibration') /
-               'calibration_options.ui')
+        ref = resources.files("bmicro.gui.calibration") / "calibration_options.ui"
         with resources.as_file(ref) as ui_file:
             uic.loadUi(ui_file, self.options_dialog)
-        self.options_dialog.setWindowTitle('Calibration options')
-        self.options_dialog.setWindowModality(
-            QtCore.Qt.WindowModality.ApplicationModal)
-        self.options_dialog.button_ok.clicked.connect(
-            self.apply_and_close_options
-        )
-        self.options_dialog.button_apply.clicked.connect(
-            self.apply_options
-        )
-        self.options_dialog.button_cancel.clicked.connect(
-            self.close_options
-        )
-        self.options_dialog.temperature.valueChanged.connect(
-            self.temperature_changed
-        )
+        self.options_dialog.setWindowTitle("Calibration options")
+        self.options_dialog.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
+        self.options_dialog.button_ok.clicked.connect(self.apply_and_close_options)
+        self.options_dialog.button_apply.clicked.connect(self.apply_options)
+        self.options_dialog.button_cancel.clicked.connect(self.close_options)
+        self.options_dialog.temperature.valueChanged.connect(self.temperature_changed)
         self.options_dialog.adjustSize()
 
-        self.mplcanvas_options = MplCanvas(self.options_dialog.widget_plot,
-                                           toolbar=('Home', 'Pan', 'Zoom'))
-        self.plot_options =\
-            self.mplcanvas_options.get_figure().add_subplot(111)
+        self.mplcanvas_options = MplCanvas(
+            self.options_dialog.widget_plot, toolbar=("Home", "Pan", "Zoom")
+        )
+        self.plot_options = self.mplcanvas_options.get_figure().add_subplot(111)
 
         self.update_options_view()
         self.options_dialog.exec()
@@ -508,13 +514,13 @@ class CalibrationView(QtWidgets.QWidget):
 
         # Set current calibration values
         self.options_dialog.shift_0.setValue(
-            1e-9 * session.setup.calibration.shift_methanol)
-        self.options_dialog.shift_1.setValue(
-            1e-9 * session.setup.calibration.shift_water)
-        self.options_dialog.temperature.blockSignals(True)
-        self.options_dialog.temperature.setValue(
-            session.setup.temperature - 273.15
+            1e-9 * session.setup.calibration.shift_methanol
         )
+        self.options_dialog.shift_1.setValue(
+            1e-9 * session.setup.calibration.shift_water
+        )
+        self.options_dialog.temperature.blockSignals(True)
+        self.options_dialog.temperature.setValue(session.setup.temperature - 273.15)
         self.options_dialog.temperature.blockSignals(False)
 
         # Get the sorted calibration keys
@@ -523,11 +529,12 @@ class CalibrationView(QtWidgets.QWidget):
             return
 
         # Allocate the shifts array
-        shifts = np.empty((
-            len(calib_keys)
-            * session.get_calibration_image_count(calib_keys[0]),
-            session.setup.calibration.num_brillouin_samples * 2
-        ))
+        shifts = np.empty(
+            (
+                len(calib_keys) * session.get_calibration_image_count(calib_keys[0]),
+                session.setup.calibration.num_brillouin_samples * 2,
+            )
+        )
         shifts[:] = np.nan
 
         # Get the resulting fitted calibration frequencies
@@ -538,9 +545,11 @@ class CalibrationView(QtWidgets.QWidget):
                 cal_image = cal_image + 1
                 w0s = cm.get_sorted_peaks(calib_key, frame)
 
-                if w0s is None or w0s.shape[0]\
-                        != session.setup.calibration.\
-                        num_brillouin_samples * 2 + 2:
+                if (
+                    w0s is None
+                    or w0s.shape[0]
+                    != session.setup.calibration.num_brillouin_samples * 2 + 2
+                ):
                     continue
 
                 w0s_f = cm.get_frequency_by_calib_key(w0s, calib_key)
@@ -548,28 +557,33 @@ class CalibrationView(QtWidgets.QWidget):
                 if w0s_f is None:
                     continue
 
-                for i in range(
-                        session.setup.calibration.num_brillouin_samples):
-                    shifts[cal_image - 1, i] =\
-                        1e-9 * abs(w0s_f[0] - w0s_f[i + 1])
-                    shifts[cal_image - 1, -1*i - 1] =\
-                        1e-9 * abs(w0s_f[-1] - w0s_f[-1*i - 2])
+                for i in range(session.setup.calibration.num_brillouin_samples):
+                    shifts[cal_image - 1, i] = 1e-9 * abs(w0s_f[0] - w0s_f[i + 1])
+                    shifts[cal_image - 1, -1 * i - 1] = 1e-9 * abs(
+                        w0s_f[-1] - w0s_f[-1 * i - 2]
+                    )
 
         # Clear the calibration plot
         self.plot_options.cla()
         # Plot calibration reference frequency shifts
         self.plot_options.hlines(
             1e-9 * session.setup.calibration.shift_methanol,
-            0, len(shifts) - 1, colors=['black'])
+            0,
+            len(shifts) - 1,
+            colors=["black"],
+        )
         if session.setup.calibration.num_brillouin_samples > 1:
             self.plot_options.hlines(
                 1e-9 * session.setup.calibration.shift_water,
-                0, len(shifts) - 1, colors=['black'])
+                0,
+                len(shifts) - 1,
+                colors=["black"],
+            )
 
         # Plot the fitted calibration frequency shifts
         self.plot_options.plot(shifts)
 
         # Set the axis labels
-        self.plot_options.set_ylabel('$\\nu_\\mathrm{B}$ [GHz]')
+        self.plot_options.set_ylabel("$\\nu_\\mathrm{B}$ [GHz]")
         # Update the plot
         self.mplcanvas_options.draw()
