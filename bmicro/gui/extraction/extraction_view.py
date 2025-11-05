@@ -7,7 +7,8 @@ from matplotlib.patches import Circle as MPLCircle
 import matplotlib
 import numpy as np
 
-from bmlab.session import Session, ExtractionMethod
+from bmlab.session import Session
+from bmlab.constants import ExtractionMethod
 from bmlab.controllers import ExtractionController
 
 from bmicro.BGThread import BGThread
