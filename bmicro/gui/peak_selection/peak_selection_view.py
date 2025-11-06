@@ -14,9 +14,9 @@ import warnings
 
 logger = logging.getLogger(__name__)
 
-MODE_DEFAULT = 'default'
-MODE_SELECT_BRILLOUIN = 'select_brillouin_peaks'
-MODE_SELECT_RAYLEIGH = 'select_rayleigh_peaks'
+MODE_DEFAULT = "default"
+MODE_SELECT_BRILLOUIN = "select_brillouin_peaks"
+MODE_SELECT_RAYLEIGH = "select_rayleigh_peaks"
 
 
 class PeakSelectionView(QtWidgets.QWidget):
@@ -27,42 +27,95 @@ class PeakSelectionView(QtWidgets.QWidget):
     def __init__(self, *args, **kwargs):
         super(PeakSelectionView, self).__init__(*args, **kwargs)
 
-        ref = (resources.files('bmicro.gui.peak_selection') /
-               'peak_selection_view.ui')
+        ref = resources.files("bmicro.gui.peak_selection") / "peak_selection_view.ui"
         with resources.as_file(ref) as ui_file:
             uic.loadUi(ui_file, self)
 
-        self.mplcanvas = MplCanvas(self.image_widget,
-                                   toolbar=('Home', 'Pan', 'Zoom'))
+        self.mplcanvas = MplCanvas(self.image_widget, toolbar=("Home", "Pan", "Zoom"))
         self.plot = self.mplcanvas.get_figure().add_subplot(111)
 
-        props = dict(facecolor='green', alpha=0.5)
+        props = dict(facecolor="green", alpha=0.5)
         self.span_selector = SpanSelector(
-            self.plot, onselect=self.on_select_data_region,
+            self.plot,
+            onselect=self.on_select_data_region,
             useblit=True,
-            direction='horizontal', props=props)
+            direction="horizontal",
+            props=props,
+        )
 
         self.button_brillouin_select_done.clicked.connect(
-            self.on_select_brillouin_clicked)
+            self.on_select_brillouin_clicked
+        )
         self.button_rayleigh_select_done.clicked.connect(
-            self.on_select_rayleigh_clicked)
-        self.button_brillouin_clear.released.connect(
-            self.clear_regions)
-        self.button_rayleigh_clear.released.connect(
-            self.clear_regions)
+            self.on_select_rayleigh_clicked
+        )
+        self.button_brillouin_clear.released.connect(self.clear_regions)
+        self.button_rayleigh_clear.released.connect(self.clear_regions)
 
         self.mode = MODE_DEFAULT
 
         self.table_Brillouin_regions.itemChanged.connect(
-            lambda item: self.on_region_changed(MODE_SELECT_BRILLOUIN, item))
+            lambda item: self.on_region_changed(MODE_SELECT_BRILLOUIN, item)
+        )
         self.table_Rayleigh_regions.itemChanged.connect(
-            lambda item: self.on_region_changed(MODE_SELECT_RAYLEIGH, item))
+            lambda item: self.on_region_changed(MODE_SELECT_RAYLEIGH, item)
+        )
+
+        self.spinBox_image_key.valueChanged.connect(self.on_image_key_changed)
 
         self.setupTables()
 
         self.update_ui()
 
     def update_ui(self):
+        self.update_payload_info()
+        self.refresh_plot()
+
+    def update_payload_info(self):
+        """Update the payload information labels"""
+        session = Session.get_instance()
+
+        try:
+            # Get total number of image keys
+            image_keys = session.get_image_keys()
+            if image_keys:
+                num_image_keys = len(image_keys)
+                self.label_total_image_keys_value.setText(str(num_image_keys))
+
+                # Update spinbox maximum
+                self.spinBox_image_key.setMaximum(num_image_keys - 1)
+            else:
+                self.label_total_image_keys_value.setText("N/A")
+                num_image_keys = 0
+
+            # Get frames per key (using first image key as reference)
+            if num_image_keys > 0:
+                first_key = image_keys[0]
+                imgs = session.get_payload_image(first_key)
+                if imgs is not None:
+                    num_frames = imgs.shape[0] if imgs.ndim > 2 else 1
+                    self.label_frames_per_key_value.setText(str(num_frames))
+                else:
+                    self.label_frames_per_key_value.setText("N/A")
+            else:
+                self.label_frames_per_key_value.setText("N/A")
+
+            # Get resolution
+            resolution = session.get_payload_resolution()
+            if resolution:
+                resolution_str = f"{resolution[0]}, {resolution[1]}, {resolution[2]}"
+                self.label_resolution_value.setText(resolution_str)
+            else:
+                self.label_resolution_value.setText("N/A")
+
+        except Exception as e:
+            logger.error(f"Error updating payload info: {e}")
+            self.label_total_image_keys_value.setText("Error")
+            self.label_frames_per_key_value.setText("Error")
+            self.label_resolution_value.setText("Error")
+
+    def on_image_key_changed(self, value):
+        """Called when the image key spinbox value changes"""
         self.refresh_plot()
 
     def reset_ui(self):
@@ -74,22 +127,22 @@ class PeakSelectionView(QtWidgets.QWidget):
     def on_select_brillouin_clicked(self):
         if self.mode == MODE_SELECT_BRILLOUIN:
             self.mode = MODE_DEFAULT
-            self.button_brillouin_select_done.setText('Select')
-            self.button_rayleigh_select_done.setText('Select')
+            self.button_brillouin_select_done.setText("Select")
+            self.button_rayleigh_select_done.setText("Select")
         else:
             self.mode = MODE_SELECT_BRILLOUIN
-            self.button_brillouin_select_done.setText('Done')
-            self.button_rayleigh_select_done.setText('Select')
+            self.button_brillouin_select_done.setText("Done")
+            self.button_rayleigh_select_done.setText("Select")
 
     def on_select_rayleigh_clicked(self):
         if self.mode == MODE_SELECT_RAYLEIGH:
             self.mode = MODE_DEFAULT
-            self.button_brillouin_select_done.setText('Select')
-            self.button_rayleigh_select_done.setText('Select')
+            self.button_brillouin_select_done.setText("Select")
+            self.button_rayleigh_select_done.setText("Select")
         else:
             self.mode = MODE_SELECT_RAYLEIGH
-            self.button_brillouin_select_done.setText('Select')
-            self.button_rayleigh_select_done.setText('Done')
+            self.button_brillouin_select_done.setText("Select")
+            self.button_rayleigh_select_done.setText("Done")
 
     def clear_regions(self):
         button = self.sender()
@@ -111,7 +164,7 @@ class PeakSelectionView(QtWidgets.QWidget):
         session = Session.get_instance()
 
         # We need the region in Hz
-        region = (1e9*xmin, 1e9*xmax)
+        region = (1e9 * xmin, 1e9 * xmax)
 
         pm = session.peak_selection_model()
         if pm:
@@ -127,13 +180,21 @@ class PeakSelectionView(QtWidgets.QWidget):
         session = Session.get_instance()
         evc = EvaluationController()
 
+        logger.info(f"Session in Peak Selection view: {session}")
+
+        logger.info("Refreshing Peak Selection plot")
+        logger.info(f"EvaluationController: {evc}")
+
         try:
-            image_key = '0'
-            spectra, times, _ = evc.extract_spectra(
-                image_key
+            # Get the selected image key from the spinbox
+            image_key = str(self.spinBox_image_key.value())
+            logger.info(
+                f"Extracting spectra for Peak Selection view with image key: {image_key}"
             )
+            spectra, times, _ = evc.extract_spectra(image_key)
             if spectra is None:
                 return
+            logger.info(f"Extracted # of spectra: {len(spectra)}")
 
             cm = session.calibration_model()
             if not cm:
@@ -146,69 +207,62 @@ class PeakSelectionView(QtWidgets.QWidget):
             if len(spectra) > 0:
                 with warnings.catch_warnings():
                     warnings.filterwarnings(
-                        action='ignore',
-                        message='Mean of empty slice'
+                        action="ignore", message="Mean of empty slice"
+                    )
+                    logger.info(
+                        f"Averaging spectra over {len(spectra)} frames for peak selection plot"
                     )
                     spectrum = np.nanmean(spectra, axis=0, keepdims=True)
                 time = times[0]
                 frequencies = cm.get_frequencies_by_time(time)
                 if frequencies is not None:
-                    self.plot.plot(1e-9*frequencies[0], spectrum[0])
-                    self.plot.set_xlabel('$f$ [GHz]')
-                    self.plot.set_xlim(1e-9*np.nanmin(frequencies),
-                                       1e-9*np.nanmax(frequencies))
+                    self.plot.plot(1e-9 * frequencies[0], spectrum[0])
+                    self.plot.set_xlabel("$f$ [GHz]")
+                    self.plot.set_xlim(
+                        1e-9 * np.nanmin(frequencies), 1e-9 * np.nanmax(frequencies)
+                    )
                 self.plot.set_ylim(bottom=0)
 
                 regions = pm.get_brillouin_regions()
                 table = self.table_Brillouin_regions
-                self.refresh_regions(
-                    spectrum, regions, table, 'r', frequencies)
+                self.refresh_regions(spectrum, regions, table, "r", frequencies)
 
                 regions = pm.get_rayleigh_regions()
                 table = self.table_Rayleigh_regions
-                self.refresh_regions(
-                    spectrum, regions, table, 'm', frequencies)
+                self.refresh_regions(spectrum, regions, table, "m", frequencies)
 
         except Exception as e:
-            logger.error('Exception occurred in peak selection: %s' % e)
+            logger.error("Exception occurred in peak selection: %s" % e)
         finally:
             self.mplcanvas.draw()
 
     def setupTables(self):
         self.table_Brillouin_regions.setColumnCount(2)
-        self.table_Brillouin_regions\
-            .setHorizontalHeaderLabels(["start", "end"])
+        self.table_Brillouin_regions.setHorizontalHeaderLabels(["start", "end"])
         header = self.table_Brillouin_regions.horizontalHeader()
-        header.setSectionResizeMode(0,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Stretch)
 
         self.table_Rayleigh_regions.setColumnCount(2)
-        self.table_Rayleigh_regions\
-            .setHorizontalHeaderLabels(["start", "end"])
+        self.table_Rayleigh_regions.setHorizontalHeaderLabels(["start", "end"])
         header = self.table_Rayleigh_regions.horizontalHeader()
-        header.setSectionResizeMode(0,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1,
-                                    QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Stretch)
 
-    def refresh_regions(self, spectrum, regions, table, color,
-                        frequencies=None):
+    def refresh_regions(self, spectrum, regions, table, color, frequencies=None):
         table.setRowCount(len(regions))
         for rowIdx, region in enumerate(regions):
             if frequencies is not None:
                 ind_l = np.nanargmin(abs(frequencies[0] - region[0]))
                 ind_r = np.nanargmin(abs(frequencies[0] - region[1]))
                 mask = slice(ind_l, ind_r)
-                self.plot.plot(
-                    1e-9*frequencies[0][mask], spectrum[0][mask], color)
+                self.plot.plot(1e-9 * frequencies[0][mask], spectrum[0][mask], color)
             # Add regions to table
             # Block signals, so the itemChanged signal is not
             # emitted during table creation
             table.blockSignals(True)
             for columnIdx, value in enumerate(region):
-                item = QtWidgets.QTableWidgetItem(str(1e-9*value))
+                item = QtWidgets.QTableWidgetItem(str(1e-9 * value))
                 table.setItem(rowIdx, columnIdx, item)
             table.blockSignals(False)
 
@@ -224,13 +278,13 @@ class PeakSelectionView(QtWidgets.QWidget):
             if type == MODE_SELECT_BRILLOUIN:
                 regions = pm.get_brillouin_regions()
                 current_region = np.asarray(regions[row])
-                current_region[column] = 1e9*value
+                current_region[column] = 1e9 * value
                 current_region = tuple(current_region)
                 pm.set_brillouin_region(row, current_region)
             elif type == MODE_SELECT_RAYLEIGH:
                 regions = pm.get_rayleigh_regions()
                 current_region = np.asarray(regions[row])
-                current_region[column] = 1e9*value
+                current_region[column] = 1e9 * value
                 current_region = tuple(current_region)
                 pm.set_rayleigh_region(row, current_region)
             self.refresh_plot()
